@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RSA-2048 em Zig | Terminal WebAssembly & Painel Didático</title>
+  <style>
+    :root {
+      --bg-dark: #0a0d14;
+      --bg-card: #111726;
+      --bg-terminal: #07090e;
+      --border-color: #1e293b;
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent-cyan: #06b6d4;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-violet: #8b5cf6;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: linear-gradient(90deg, #0f172a 0%, #1e1b4b 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .badge-zig {
+      background-color: #f7a41d;
+      color: #000;
+      font-weight: 800;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .badge-wasm {
+      background-color: #654ff0;
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .header-links a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-size: 0.85rem;
+      margin-left: 1rem;
+      transition: color 0.2s;
+    }
+
+    .header-links a:hover {
+      color: #fff;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      flex: 1;
+      gap: 1rem;
+      padding: 1rem;
+      max-width: 1800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 1024px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background-color: rgba(15, 23, 42, 0.7);
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--accent-cyan);
+    }
+
+    .actions-bar {
+      padding: 0.75rem 1rem;
+      background-color: rgba(30, 41, 59, 0.4);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background-color: #1e293b;
+      color: var(--text-main);
+      border: 1px solid #334155;
+      padding: 0.5rem 0.85rem;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.8rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background-color: #334155;
+      border-color: var(--accent-cyan);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      border-color: #38bdf8;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      border-color: #34d399;
+      color: #fff;
+    }
+
+    .btn-warning {
+      background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+      border-color: #fbbf24;
+      color: #fff;
+    }
+
+    /* Terminal */
+    .terminal-container {
+      background-color: var(--bg-terminal);
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      min-height: 480px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .terminal-output {
+      flex: 1;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .terminal-line {
+      margin-bottom: 0.35rem;
+    }
+
+    .term-prompt {
+      color: var(--accent-green);
+      font-weight: 600;
+    }
+
+    .term-cyan { color: var(--accent-cyan); }
+    .term-amber { color: var(--accent-amber); }
+    .term-green { color: var(--accent-green); }
+    .term-muted { color: var(--text-muted); }
+    .term-error { color: #f87171; }
+
+    .terminal-input-row {
+      display: flex;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+
+    .terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-family: inherit;
+      font-size: inherit;
+      padding-left: 0.5rem;
+    }
+
+    /* Inspector Panel */
+    .inspector-content {
+      padding: 1rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      font-size: 0.8rem;
+    }
+
+    .math-block {
+      background-color: rgba(15, 23, 42, 0.6);
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 0.75rem;
+    }
+
+    .math-title {
+      font-weight: 700;
+      color: var(--accent-amber);
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .math-formula {
+      color: #cbd5e1;
+      margin-bottom: 0.5rem;
+      font-style: italic;
+    }
+
+    .param-box {
+      background: #020617;
+      border: 1px solid #334155;
+      padding: 0.4rem 0.6rem;
+      border-radius: 4px;
+      margin-top: 0.3rem;
+      word-break: break-all;
+      color: #38bdf8;
+      font-size: 0.75rem;
+      max-height: 70px;
+      overflow-y: auto;
+    }
+
+    .timing-badge {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      background-color: #1e293b;
+      color: #10b981;
+      border: 1px solid #059669;
+    }
+
+    footer {
+      border-top: 1px solid var(--border-color);
+      background-color: rgba(15, 23, 42, 0.8);
+      padding: 0.75rem 2rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <span class="badge-zig">ZIG 0.17</span>
+      <span class="badge-wasm">WASM32</span>
+      <strong>RSA-2048 Cryptographic Engine</strong>
+    </div>
+    <div class="header-links">
+      <a href="https://github.com/o-gariba/rsa-zig-seguranca-info-fatec-rp" target="_blank">GitHub Repo</a>
+      <a href="https://github.com/o-gariba/rsa-zig-seguranca-info-fatec-rp/blob/main/docs/MATH_SPEC.md" target="_blank">MATH_SPEC.md</a>
+      <a href="https://github.com/o-gariba/rsa-zig-seguranca-info-fatec-rp/blob/main/docs/ARCHITECTURE.md" target="_blank">ARCHITECTURE.md</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Terminal Column -->
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">🖥️ Terminal Web Interativo (WebAssembly Freestanding)</span>
+        <span id="wasm-status" class="timing-badge">Carregando WASM...</span>
+      </div>
+
+      <div class="actions-bar">
+        <button id="btn-demo-keygen" class="btn btn-primary">⚡ 1. Gerar Chaves RSA-2048</button>
+        <button id="btn-demo-encrypt" class="btn btn-warning">🔒 2. Cifrar (OAEP-SHA256)</button>
+        <button id="btn-demo-decrypt" class="btn btn-success">⚡ 3. Decifrar via CRT (Garner)</button>
+        <button id="btn-clear" class="btn">Limpar</button>
+      </div>
+
+      <div id="terminal-body" class="terminal-container">
+        <div id="terminal-output" class="terminal-output">
+<span class="term-cyan">========================================================================</span>
+<span class="term-amber">  RSA-2048 EM ZIG (WebAssembly Freestanding + Zero Alocação de Memória)</span>
+<span class="term-cyan">========================================================================</span>
+Digite <span class="term-green">'help'</span> para listar os comandos ou clique nos botões acima.
+Entropia fornecida criptograficamente por: <span class="term-muted">window.crypto.getRandomValues</span>
+Aritmética modular executada inteiramente na memória linear do WebAssembly.
+        </div>
+        <div class="terminal-input-row">
+          <span class="term-prompt">user@rsa-zig:~$</span>
+          <input type="text" id="terminal-input" class="terminal-input" autofocus autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+    </section>
+
+    <!-- Didactic Formula Inspector Column -->
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">📐 Painel Didático das Fórmulas Matemáticas</span>
+        <span id="metric-keygen-time" class="timing-badge">0 ms</span>
+      </div>
+
+      <div class="inspector-content">
+        <!-- Primos e Módulo -->
+        <div class="math-block">
+          <div class="math-title">
+            <span>1. Primos p e q (1024 bits)</span>
+            <span class="term-muted">MSB force + Miller-Rabin</span>
+          </div>
+          <div class="math-formula">p, q ≥ 2¹⁰²³ + 2¹⁰²² &nbsp;|&nbsp; n = p · q (2048 bits exatos)</div>
+          <div>Primo p (1024 bits):</div>
+          <div id="disp-p" class="param-box">0x...</div>
+          <div style="margin-top:0.4rem;">Primo q (1024 bits):</div>
+          <div id="disp-q" class="param-box">0x...</div>
+          <div style="margin-top:0.4rem;">Módulo Público n = p · q (2048 bits):</div>
+          <div id="disp-n" class="param-box">0x...</div>
+        </div>
+
+        <!-- Totiente e Inversão -->
+        <div class="math-block">
+          <div class="math-title">
+            <span>2. Totiente e Euclides Estendido (i4096)</span>
+            <span class="term-muted">Módulo Par</span>
+          </div>
+          <div class="math-formula">λ(n) = mmc(p-1, q-1) &nbsp;|&nbsp; e · d ≡ 1 (mod λ(n))</div>
+          <div>Expoente Público e: <strong style="color:#f59e0b;">65537 (0x10001)</strong></div>
+          <div style="margin-top:0.4rem;">Expoente Privado d (2048 bits):</div>
+          <div id="disp-d" class="param-box">0x...</div>
+        </div>
+
+        <!-- Parâmetros CRT -->
+        <div class="math-block">
+          <div class="math-title">
+            <span>3. Teorema Chinês dos Restos (Algoritmo de Garner)</span>
+            <span class="term-muted">Aceleração ~4x</span>
+          </div>
+          <div class="math-formula">
+            d_p = d mod (p-1) &nbsp;|&nbsp; d_q = d mod (q-1) &nbsp;|&nbsp; q_inv = q⁻¹ mod p<br>
+            h = q_inv · (m₁ - m₂) mod p &nbsp;|&nbsp; m = m₂ + h · q
+          </div>
+          <div>dp (1024 bits):</div>
+          <div id="disp-dp" class="param-box">0x...</div>
+          <div style="margin-top:0.4rem;">dq (1024 bits):</div>
+          <div id="disp-dq" class="param-box">0x...</div>
+          <div style="margin-top:0.4rem;">q_inv (1024 bits):</div>
+          <div id="disp-qinv" class="param-box">0x...</div>
+        </div>
+
+        <!-- Padding OAEP -->
+        <div class="math-block">
+          <div class="math-title">
+            <span>4. Cifra e Padding Probabilístico OAEP-SHA256</span>
+          </div>
+          <div class="math-formula">EM = 0x00 || (seed ⊕ MGF1(maskedDB)) || (DB ⊕ MGF1(seed))</div>
+          <div>Último Texto Cifrado (Base64):</div>
+          <div id="disp-cipher" class="param-box">Nenhuma mensagem cifrada ainda.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div>Projeto Acadêmico de Segurança da Informação — FATEC Ribeirão Preto</div>
+    <div>100% Zig Puro (std.crypto.ff + u2048 + i4096) | Sem dependências externas</div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

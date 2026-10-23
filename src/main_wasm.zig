@@ -14,6 +14,12 @@ var priv_pem_len: usize = 0;
 var msg_len: usize = 0;
 var inspect_json_len: usize = 0;
 
+export fn wasm_get_input_ptr() [*]u8 {
+    return &msg_buf;
+}
+export fn wasm_get_output_ptr() [*]u8 {
+    return &inspect_json_buf;
+}
 export fn wasm_get_seed_ptr() [*]u8 {
     return &seed_buf;
 }

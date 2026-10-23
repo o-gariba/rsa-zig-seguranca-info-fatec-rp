@@ -1,0 +1,159 @@
+name: CI/CD Pipeline — Test, GitHub Pages & Releases
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # ============================================================================
+  # 1. SUÍTE COMPLETA DE TESTES UNITÁRIOS MATEMÁTICOS
+  # ============================================================================
+  test:
+    name: "Testes Matemáticos (27 testes)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar Compilador Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.14.0
+
+      - name: Executar Teste Etapa 1 (GCD, LCM e Euclides Estendido i4096)
+        run: zig build test-etapa1 --summary all
+
+      - name: Executar Teste Etapa 2 (Crivo 256 Primos + Miller-Rabin)
+        run: zig build test-etapa2 --summary all
+
+      - name: Executar Teste Etapa 3 (OAEP, PKCS#1 v1.5, PEM e Base64)
+        run: zig build test-etapa3 --summary all
+
+      - name: Executar Teste Etapa 4 (Núcleo RSA-2048 e Teorema Chinês dos Restos)
+        run: zig build test-etapa4 --summary all
+
+      - name: Executar Suíte Completa de Integração
+        run: zig build test --summary all
+
+  # ============================================================================
+  # 2. COMPILAÇÃO WASM E PUBLICAÇÃO NO GITHUB PAGES
+  # ============================================================================
+  deploy-pages:
+    name: "Publicar WebAssembly no GitHub Pages"
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar Compilador Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.14.0
+
+      - name: Compilar Motor WebAssembly (web/rsa.wasm)
+        run: zig build wasm
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Fazer Upload do Artefato Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'web'
+
+      - name: Publicar no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ============================================================================
+  # 3. COMPILAÇÃO CRUZADA DOS 5 BINÁRIOS ESTÁTICOS E GITHUB RELEASES
+  # ============================================================================
+  build-binaries:
+    name: "Compilar Binários Multiplataforma"
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-linux-musl
+            output: rsa-cli-linux-x86_64
+          - target: aarch64-linux-musl
+            output: rsa-cli-linux-aarch64
+          - target: x86_64-windows-gnu
+            output: rsa-cli-windows-x86_64.exe
+          - target: x86_64-macos
+            output: rsa-cli-macos-x86_64
+          - target: aarch64-macos
+            output: rsa-cli-macos-aarch64
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar Compilador Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.14.0
+
+      - name: Compilar Binário Estático (${{ matrix.target }})
+        run: |
+          zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
+          mkdir -p release-dist
+          if [ "${{ matrix.target }}" = "x86_64-windows-gnu" ]; then
+            cp zig-out/bin/rsa-cli.exe release-dist/${{ matrix.output }}
+          else
+            cp zig-out/bin/rsa-cli release-dist/${{ matrix.output }}
+            chmod +x release-dist/${{ matrix.output }}
+          fi
+
+      - name: Upload de Artefato de Compilação
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}
+          path: release-dist/${{ matrix.output }}
+
+  publish-release:
+    name: "Publicar Binários no GitHub Releases"
+    needs: build-binaries
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download de Todos os Binários Compilados
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Organizar Arquivos de Release
+        run: |
+          mkdir -p release-assets
+          find dist/ -type f -exec cp {} release-assets/ \;
+          ls -la release-assets/
+
+      - name: Criar ou Atualizar Release no GitHub
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
