@@ -28,10 +28,10 @@ jobs:
       - name: Checkout do Repositório
         uses: actions/checkout@v4
 
-      - name: Instalar Compilador Zig
-        uses: mlugg/setup-zig@v1
+      - name: Instalar Compilador Zig (0.17.0 / master)
+        uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.14.0
+          version: master
 
       - name: Executar Teste Etapa 1 (GCD, LCM e Euclides Estendido i4096)
         run: zig build test-etapa1 --summary all
@@ -63,10 +63,10 @@ jobs:
       - name: Checkout do Repositório
         uses: actions/checkout@v4
 
-      - name: Instalar Compilador Zig
-        uses: mlugg/setup-zig@v1
+      - name: Instalar Compilador Zig (0.17.0 / master)
+        uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.14.0
+          version: master
 
       - name: Compilar Motor WebAssembly (web/rsa.wasm)
         run: zig build wasm
@@ -108,10 +108,10 @@ jobs:
       - name: Checkout do Repositório
         uses: actions/checkout@v4
 
-      - name: Instalar Compilador Zig
-        uses: mlugg/setup-zig@v1
+      - name: Instalar Compilador Zig (0.17.0 / master)
+        uses: goto-bus-stop/setup-zig@v2
         with:
-          version: 0.14.0
+          version: master
 
       - name: Compilar Binário Estático (${{ matrix.target }})
         run: |
@@ -142,12 +142,12 @@ jobs:
       - name: Download de Todos os Binários Compilados
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          pattern: rsa-cli-*
+          merge-multiple: true
+          path: release-assets
 
       - name: Organizar Arquivos de Release
         run: |
-          mkdir -p release-assets
-          find dist/ -type f -exec cp {} release-assets/ \;
           ls -la release-assets/
 
       - name: Criar ou Atualizar Release no GitHub

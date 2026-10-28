@@ -36,6 +36,11 @@ O projeto adota uma arquitetura pragmática de baixo nível em Zig:
    - Limpeza de chaves privadas e segredos na stack com `std.crypto.secureZero`, prevenindo *Dead-Store Elimination* (DSE) pelo otimizador do compilador.
    - Descriptografia em tempo constante com `.pow()` para imunidade contra ataques de temporização (*timing attacks*).
 4. **Preenchimento Probabilístico:** Suporte a **OAEP** com SHA-256 e MGF1 (RFC 8017) e modo didático **PKCS#1 v1.5**.
+5. **A Filosofia do Zig vs. Docker (Cross-Compilation Nativa e Zero Runtime):**
+   - Em vez de containers Docker volumosos com toolchains fragmentadas, o projeto abraça a filosofia do Zig: o compilador já traz embutidas todas as bibliotecas padrão de sistema (`musl`, `mingw-w64`, `wasm32-freestanding`).
+   - Um único comando `zig build` a partir de qualquer sistema compila binários estáticos para Linux, Windows, macOS e WebAssembly sem dependências dinâmicas nem virtualização.
+6. **Trava Arquitetural em Tempo de Compilação (`comptime`):**
+   - O `build.zig` inclui uma verificação `comptime` que valida `builtin.zig_version >= 0.17.0`. Caso um compilador legado seja invocado, o build aborta instantaneamente com uma mensagem descritiva antes de qualquer compilação de código.
 
 ---
 
@@ -115,6 +120,17 @@ zig build -Doptimize=ReleaseFast
 zig build wasm
 ```
 
+### 🔬 Oráculo Algébrico e Verificador Pré-Deploy (Python + Zig + Node.js)
+Para garantir que a matemática de 2048 bits e os pipelines de CI/CD estejam 100% corretos antes de qualquer `git push`, utilize o verificador integrado:
+```bash
+python3 scripts/verify_deploy.py
+```
+Este script utiliza o motor de precisão arbitrária nativo do Python como um **Oráculo Matemático (*Ground Truth*)**:
+- Prova formalmente $p \cdot q = n$ (2048 bits);
+- Valida o totiente $\lambda(n) = \text{mmc}(p-1, q-1)$ e o inverso modular $(e \cdot d) \equiv 1 \pmod{\lambda(n)}$;
+- Valida os expoentes CRT e o coeficiente de Garner $(q \cdot q_{\text{inv}}) \equiv 1 \pmod p$;
+- Testa a criptografia/descriptografia ponta a ponta com pipes POSIX e instancia o módulo `web/rsa.wasm` via Node.js (V8).
+
 ### Guia para Desenvolvedores
 Para inspecionar ou editar o código-fonte, utilize sempre o editor `vim`:
 ```bash
@@ -133,6 +149,8 @@ rsa-project/
 │   └── workflows/
 │       └── deploy.yml        # CI/CD: Testes, GitHub Pages e Releases
 ├── build.zig                 # Build system com testes por etapa e alvos nativo/wasm
+├── scripts/
+│   └── verify_deploy.py      # Oráculo matemático em Python e verificador pré-deploy
 ├── README.md                 # Visão geral, instruções e comandos rápidos
 ├── docs/
 │   ├── ARCHITECTURE.md       # Decisões de arquitetura, limites de stack e DSE

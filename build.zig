@@ -1,4 +1,11 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
+comptime {
+    if (builtin.zig_version.order(.{ .major = 0, .minor = 17, .patch = 0 }) == .lt) {
+        @compileError("Este projeto requer Zig >= 0.17.0. Versao detectada: " ++ builtin.zig_version_string);
+    }
+}
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -11,7 +18,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main_cli.zig"),
             .target = target,
             .optimize = optimize,
-            .strip = optimize != .Debug,
+            .strip = optimize != .debug,
         }),
     });
     b.installArtifact(cli_exe);
@@ -33,7 +40,7 @@ pub fn build(b: *std.Build) void {
                 .cpu_arch = .wasm32,
                 .os_tag = .freestanding,
             }),
-            .optimize = .ReleaseSmall,
+            .optimize = .small,
             .strip = true,
         }),
     });
