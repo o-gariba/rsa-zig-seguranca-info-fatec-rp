@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main_cli.zig"),
             .target = target,
             .optimize = optimize,
-            .strip = optimize != .debug,
+            .strip = optimize != .Debug,
         }),
     });
     b.installArtifact(cli_exe);
@@ -33,7 +33,7 @@ pub fn build(b: *std.Build) void {
                 .cpu_arch = .wasm32,
                 .os_tag = .freestanding,
             }),
-            .optimize = .small,
+            .optimize = .ReleaseSmall,
             .strip = true,
         }),
     });
