@@ -173,6 +173,79 @@ rsa-project/
     └── install.ps1           # Script de instalação em 1 linha (Windows PowerShell)
 ```
 
+## 📁 Estrutura de Diretórios
+
+```
+mindmap
+  root(("🔐 RSA-2048 em Zig Puro
+  Fachada: src/core/root.zig
+  Zero Heap / 100% Stack"))
+
+    {{"[FASE 1] Base Aritmética e Limites de Stack
+    Arquivos: src/core/rsa.zig, prime.zig, euclid.zig"}}
+      ["[1.1 - REPRESENTAÇÃO] Decomposição Posicional em Limbs Radix-64 (B = 2^64)
+      Arquivos: src/core/prime.zig e src/core/rsa.zig"]
+        ("[1.1.1 - CÓDIGO] Primos p e q alocados na stack como u1024: 16 limbs de 64 bits (128 bytes) em src/core/prime.zig")
+        ("[1.1.2 - CÓDIGO] Módulo público n e chave privada d como u2048: 32 limbs de 64 bits (256 bytes) em src/core/rsa.zig")
+      ["[1.2 - OVERFLOW] Prevenção Matemática de Truncamento Modular na Stack
+      Arquivos: src/core/rsa.zig e src/core/euclid.zig"]
+        ("[1.2.1 - MATEMÁTICA/CÓDIGO] Produto de dois inteiros de 1024 bits exige 2048 bits: cast prévio obrigatório (p_wide, q_wide: u2048) antes de n = p · q em src/core/rsa.zig")
+        ("[1.2.2 - MATEMÁTICA/CÓDIGO] Coeficientes de Bézout alternam de sinal e o produto q_k · t_k excede 2048 bits: uso de i4096 (64 limbs com sinal) em src/core/euclid.zig")
+      ["[1.3 - MONTGOMERY] Aritmética e Redução Modular de Montgomery (std.crypto.ff)
+      Arquivos: src/core/prime.zig e src/core/rsa.zig"]
+        ("[1.3.1 - MATEMÁTICA] Transforma a em a_bar = a · R mod N (com R = 2^k), exigindo estritamente que o módulo N seja ímpar: mdc(N, 2^64) = 1")
+        ("[1.3.2 - PERFORMANCE] Algoritmo REDC cancela os bits inferiores e substitui divisões longas de CPU por simples deslocamento de bits (bit-shift)")
+
+    {{"[FASE 2] Geração de Candidatos e Primalidade
+    Arquivo: src/core/prime.zig"}}
+      ["[2.1 - CANDIDATO] Sorteio CSPRNG de 128 Bytes e Manipulação de Bits
+      Arquivo: src/core/prime.zig"]
+        ("[2.1.1 - MATEMÁTICA/CÓDIGO] Forçar LSB (B_127 |= 0x01) garante p ≡ 1 (mod 2), descartando pares compostos imediatamente")
+        ("[2.1.2 - MATEMÁTICA/CÓDIGO] Forçar os 2 MSBs (B_0 |= 0xC0) impõe p, q >= (3/4) · 2^1024")
+        ("[2.1.3 - PROVA DE 2048 BITS] Garante que n = p · q >= (9/16) · 2^2048 = 0,5625 · 2^2048 > 2^2047, fixando n em exatos 2048 bits sem risco de ter 2047 bits")
+      ["[2.2 - CRIVO] Filtro Rápido pelo Crivo de Eratóstenes (256 Primos Ímpares)
+      Arquivo: src/core/prime.zig"]
+        ("[2.2.1 - CÓDIGO] Função modSmall testa divisibilidade direta em limb de 64 bits pelos primos ímpares de 3 até 1621 antes de invocar Montgomery")
+        ("[2.2.2 - TEOREMA DE MERTENS] Pelo 3º Teorema de Mertens, apenas ~12,6% dos ímpares sobrevivem: elimina 87,4% dos compostos a custo quase zero")
+      ["[2.3 - MILLER-RABIN] Teste Probabilístico de Primalidade (64 Rodadas)
+      Arquivo: src/core/prime.zig"]
+        ("[2.3.1 - DECOMPOSIÇÃO] Fatora p - 1 = 2^s · d (com d ímpar) em O(1) de hardware usando a instrução @ctz (Count Trailing Zeros)")
+        ("[2.3.2 - FERMAT E RAÍZES] Combina Pequeno Teorema de Fermat (a^(p-1) ≡ 1 mod p) com a inexistência de raízes quadradas não-triviais da unidade (x^2 ≡ 1 mod p ⟹ x ≡ ±1), rejeitando Números de Carmichael")
+        ("[2.3.3 - TEOREMA DE MONIER-RABIN] Cada rodada tem no máximo 1/4 de falsas testemunhas: em 64 rodadas CSPRNG, P(falso positivo) <= (1/4)^64 = 2^-128")
+
+    {{"[FASE 3] Álgebra de Chaves e Inversão Modular
+    Arquivos: src/core/euclid.zig e src/core/rsa.zig"}}
+      ["[3.1 - TOTIENTE] Expoente Universal de Carmichael vs Totiente de Euler
+      Arquivos: src/core/euclid.zig e src/core/rsa.zig"]
+        ("[3.1.1 - MATEMÁTICA] Calcula λ(n) = mmc(p - 1, q - 1) = (p - 1)(q - 1) / mdc(p - 1, q - 1) via funções gcd e lcm em src/core/euclid.zig")
+        ("[3.1.2 - OTIMIZAÇÃO] Como p - 1 e q - 1 são pares, mdc >= 2 garante λ(n) <= φ(n)/2, gerando um expoente privado d menor sem perder segurança")
+      ["[3.2 - EXPOENTE PÚBLICO] Escolha do 4º Primo de Fermat (e = 65537)
+      Arquivo: src/core/rsa.zig"]
+        ("[3.2.1 - MATEMÁTICA/PERFORMANCE] e = 2^16 + 1 (0b10000000000000001) possui apenas 2 bits ativos: exige exatamente 16 quadraturas e 1 multiplicação modular")
+        ("[3.2.2 - SEGURANÇA] Imune aos ataques de baixo expoente de Coppersmith e de transmissão de Håstad que afetam e = 3")
+      ["[3.3 - EUCLIDES ESTENDIDO] Inversão Modular Manual sobre Inteiros com Sinal i4096
+      Arquivo: src/core/euclid.zig"]
+        ("[3.3.1 - RESTRIÇÃO ARQUITETURAL] Como λ(n) é SEMPRE PAR, std.crypto.ff.Modulus falha com error.EvenModulus, exigindo implementação manual em src/core/euclid.zig")
+        ("[3.3.2 - IDENTIDADE DE BÉZOUT] Resolve e · t + λ(n) · s = mdc(e, λ(n)) = 1 iterando r_(k+1) = r_(k-1) - q_k · r_k e normalizando t < 0 para obter d ≡ e^-1 (mod λ(n))")
+
+    {{"[FASE 4] Padding, Cifragem e Aceleração CRT
+    Arquivos: src/core/padding.zig, rsa.zig e codec.zig"}}
+      ["[4.1 - PADDING] Preenchimento Probabilístico OAEP-SHA256 e PKCS#1 v1.5
+      Arquivos: src/core/padding.zig e src/core/codec.zig"]
+        ("[4.1.1 - VULNERABILIDADES EVITADAS] Neutraliza o determinismo, a maleabilidade homomórfica (c1 · c2) e o ataque de raiz e-ésima do Textbook RSA")
+        ("[4.1.2 - REDE DE FEISTEL OAEP] Aplica duas rodadas com MGF1-SHA256 gerando EM = 0x00 || maskedSeed (32B) || maskedDB (223B) de 256B (segurança IND-CCA2, byte 0x00 garante m < n)")
+        ("[4.1.3 - SERIALIZAÇÃO] Codificação de chaves e cifras em PEM/Base64 e Hexadecimal sem alocação dinâmica em src/core/codec.zig")
+      ["[4.2 - CIFRAGEM] Criptografia Pública Assimétrica (RSAEP)
+      Arquivo: src/core/rsa.zig"]
+        ("[4.2.1 - MATEMÁTICA/CÓDIGO] Calcula c = m^e mod n no espaço de Montgomery de 2048 bits via Modulus(2048).powPublic em src/core/rsa.zig")
+      ["[4.3 - DECIFRAGEM CRT] Teorema Chinês dos Restos e Algoritmo de Garner
+      Arquivo: src/core/rsa.zig"]
+        ("[4.3.1 - ISOMORFISMO DE ANÉIS] Explora Z_n ≅ Z_p × Z_q para quebrar a exponenciação de 2048 bits em duas de 1024 bits: m1 = c_p^dp mod p e m2 = c_q^dq mod q")
+        ("[4.3.2 - FÓRMULA DE GARNER] Reconstrói m = m2 + h · q onde h = q_inv · (m1 + p - (m2 mod p)) mod p, somando p para evitar underflow em tipo unsigned")
+        ("[4.3.3 - PROVA DE ACELERAÇÃO 4X] Como a exponenciação modular é O(k^3), reduzir k pela metade reduz o custo de 8 · C · 1024^3 para 2 · C · 1024^3 (ganho teórico de 8/2 = 4x)")
+        ("[4.3.4 - PROTEÇÃO SIDE-CHANNEL] Usa .pow() em tempo constante contra Timing Attacks e limpa chaves na stack com barreiras voláteis std.crypto.secureZero")
+```
+
 ---
 
 ## 📜 Licença
