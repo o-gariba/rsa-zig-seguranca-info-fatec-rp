@@ -4,7 +4,7 @@ Este documento descreve as decisões de arquitetura, dimensionamento de memória
 
 ---
 
-## 1. Visão Geral da Arquitetura (Cenário 3)
+## 1. Visão Geral da Arquitetura
 
 O projeto adota uma abordagem pragmática de baixo nível: **toda a lógica do protocolo RSA e da Teoria dos Números é implementada manualmente em Zig**, utilizando recursos da biblioteca padrão (`std`) apenas para operações aritméticas de base e abstrações de sistema operacional:
 
@@ -58,7 +58,7 @@ O consumo de memória na stack foi rigorosamente dimensionado para garantir viab
 
 ---
 
-## 3. Divisão Estrita entre Módulos Ímpares e Pares
+## . Divisão Estrita entre Módulos Ímpares e Pares
 
 Uma das restrições matemáticas centrais da Redução de Montgomery (`std.crypto.ff.Modulus`) é a exigência de que o módulo $N$ seja ímpar:
 $$\gcd(N, 2^{64}) = 1$$
