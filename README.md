@@ -173,7 +173,7 @@ rsa-project/
     └── install.ps1           # Script de instalação em 1 linha (Windows PowerShell)
 ```
 
-## 📁 Estrutura de Diretórios
+## 🧠 Mapa Mental
 
 ```
 mindmap
