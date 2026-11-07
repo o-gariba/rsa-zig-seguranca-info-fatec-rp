@@ -4,23 +4,160 @@ Implementação completa, didática e de alta performance do protocolo criptogr�
 
 ---
 
-## 🚀 Execução Rápida em 1 Linha (Sem instalar Zig)
+## 📖 COMO USAR
 
-Baixe e execute instantaneamente o binário estático auto-contido para o seu sistema:
+O projeto pode ser utilizado de duas formas principais (**Binário CLI Nativo** ou **Modo WebAssembly**) e foi desenhado para rodar em **qualquer máquina — inclusive em computadores públicos ou de terceiros onde você não tem permissão de administrador nem o compilador Zig instalado**.
 
-### Linux & macOS (curl)
+### 🖥️ Parte 1: Executando em Computador de Terceiros / Público (Sem Instalar Zig)
+
+Se você está em um laboratório de informática, computador público ou máquina de terceiros sem o compilador Zig e sem acesso `root`/Administrador, além do **[GitHub Pages](https://o-gariba.github.io/rsa-zig-seguranca-info-fatec-rp/)**, você possui **5 formas práticas** de executar o projeto:
+
+#### 1. Instalação Automática em User-Space (1 Linha — Sem `sudo`/Admin)
+Os scripts abaixo detectam seu sistema operacional e arquitetura, baixam o binário 100% estático para `$HOME/.local/bin` (espaço de usuário) e executam uma demonstração automática ponta a ponta:
+
+- **Linux & macOS (`curl`):**
+  ```bash
+  curl -sSL https://o-gariba.github.io/rsa-zig-seguranca-info-fatec-rp/install.sh | sh
+  ```
+- **Windows (`PowerShell`):**
+  ```powershell
+  irm https://o-gariba.github.io/rsa-zig-seguranca-info-fatec-rp/install.ps1 | iex
+  ```
+
+#### 2. Execução Efêmera em Pasta Temporária (`/tmp` ou Pendrive) — Zero Instalação
+Como os binários gerados pelo CI/CD são **100% estáticos** (`musl` no Linux, `mingw` no Windows — sem dependência de DLLs ou `glibc`), você pode baixar o executável diretamente da aba **[GitHub Releases](https://github.com/o-gariba/rsa-zig-seguranca-info-fatec-rp/releases/latest)** para `/tmp` (ou `$env:TEMP`) e executá-lo sem deixar rastros no sistema:
+
+- **Linux (`x86_64`) direto em `/tmp`:**
+  ```bash
+  curl -sSL https://github.com/o-gariba/rsa-zig-seguranca-info-fatec-rp/releases/latest/download/rsa-cli-linux-x86_64 -o /tmp/rsa-cli
+  chmod +x /tmp/rsa-cli
+  /tmp/rsa-cli keygen --pub /tmp/id.pub --priv /tmp/id.key --inspect
+  ```
+- **Windows (`x86_64`) direto em `$env:TEMP`:**
+  ```powershell
+  Invoke-WebRequest -Uri "https://github.com/o-gariba/rsa-zig-seguranca-info-fatec-rp/releases/latest/download/rsa-cli-windows-x86_64.exe" -OutFile "$env:TEMP\rsa-cli.exe"
+  & "$env:TEMP\rsa-cli.exe" keygen --pub "$env:TEMP\id.pub" --priv "$env:TEMP\id.key" --inspect
+  ```
+*(Arquivos disponíveis nas Releases: `rsa-cli-linux-x86_64`, `rsa-cli-linux-aarch64`, `rsa-cli-windows-x86_64.exe`, `rsa-cli-macos-x86_64`, `rsa-cli-macos-aarch64`).*
+
+#### 3. Rodar o Modo WebAssembly Localmente (Offline / Sem GitHub Pages)
+O motor WebAssembly compilado (**`web/rsa.wasm`**) **já está versionado dentro do repositório**. Se você baixar o `.zip` do projeto (ou fizer `git clone`), não precisa do Zig para abrir a aplicação Web localmente; basta iniciar um servidor HTTP estático na pasta `web/` com qualquer ferramenta padrão já presente na máquina:
+
 ```bash
-curl -sSL https://o-gariba.github.io/rsa-zig-seguranca-info-fatec-rp/install.sh | sh
+# Opção com Python 3 (nativo na maioria das distribuições Linux/macOS e laboratórios):
+python3 -m http.server 8080 --directory web
+
+# Opção com Node.js (se disponível):
+npx serve web
+
+# Opção com PHP (se disponível):
+php -S localhost:8080 -t web
+```
+Em seguida, acesse **`http://localhost:8080`** no navegador.
+
+#### 4. Executar o `web/rsa.wasm` via Node.js no Terminal (Contornando Bloqueio de Binários)
+Em computadores públicos com políticas rígidas (como Windows SmartScreen/AppLocker ou partições Linux montadas com `noexec` que impedem a execução de binários nativos baixados), se houver **Node.js** instalado, você pode rodar o motor criptográfico `web/rsa.wasm` diretamente no terminal via engine V8:
+
+```bash
+node -e '
+const fs = require("fs"), crypto = require("crypto");
+(async () => {
+  const { instance } = await WebAssembly.instantiate(fs.readFileSync("web/rsa.wasm"), {});
+  const w = instance.exports, mem = () => new Uint8Array(w.memory.buffer);
+  crypto.randomFillSync(new Uint8Array(w.memory.buffer, w.wasm_get_seed_ptr(), 64));
+  w.wasm_keygen(32);
+  console.log("=== INSPEÇÃO WASM (JSON) ===");
+  console.log(Buffer.from(w.memory.buffer, w.wasm_get_inspect_ptr(), w.wasm_get_inspect_len()).toString());
+})();
+'
 ```
 
-### Windows (PowerShell)
-```powershell
-irm https://o-gariba.github.io/rsa-zig-seguranca-info-fatec-rp/install.ps1 | iex
+#### 5. Execução em Nuvem pelo Navegador (GitHub Codespaces / Google Cloud Shell)
+Se a máquina pública só permitir o uso do navegador e bloquear o terminal local, clique no botão **`Code` ➔ `Codespaces` ➔ `Create codespace on main`** no topo deste repositório no GitHub (ou pressione a tecla `.` / use o Google Cloud Shell) para abrir um ambiente Linux completo e gratuito diretamente no navegador.
+
+---
+
+### 💻 Parte 2: Como Usar o Binário Nativo (`rsa-cli`)
+
+O executável nativo segue a filosofia UNIX: suporta arquivos explícitos (`--in` e `--out`) e *pipes* POSIX (`stdin` e `stdout`). Todos os relatórios matemáticos e de tempo (`--inspect`) são emitidos exclusivamente em `stderr`, garantindo que o `stdout` contenha apenas o resultado puro para encadeamento de comandos.
+
+#### Sintaxe Geral
+```text
+rsa-cli keygen  [--pub <arq>] [--priv <arq>] [--inspect]
+rsa-cli encrypt --pub <arq> [<mensagem>] [--in <arq>] [--out <arq>] [--inspect]
+rsa-cli decrypt --priv <arq> [<cifra_b64>] [--in <arq>] [--out <arq>] [--inspect]
 ```
 
-### 🌐 Terminal Interativo WebAssembly no Navegador
-Acesse a demonstração interativa completa diretamente pelo navegador (sem download):  
-👉 **[https://o-gariba.github.io/rsa-zig-seguranca-info-fatec-rp/](https://o-gariba.github.io/rsa-zig-seguranca-info-fatec-rp/)**
+#### 1. Geração de Chaves RSA-2048 (`keygen`)
+Gera os primos $p$ e $q$ de 1024 bits (64 rodadas de Miller-Rabin), calcula $n = p \cdot q$, o totiente $\lambda(n)$, o inverso modular $d$ e os parâmetros CRT ($d_p, d_q, q_{\text{inv}}$), salvando as chaves em formato PEM:
+```bash
+./zig-out/bin/rsa-cli keygen --pub id_rsa.pub --priv id_rsa.key --inspect
+```
+*(Se `--pub` e `--priv` forem omitidos, utiliza por padrão `id_rsa.pub` e `id_rsa.key`).*
+
+#### 2. Criptografia OAEP-SHA256 (`encrypt` — Máx. 190 bytes)
+- **Direto por Argumento Posicional (Recomendado):**
+  ```bash
+  ./zig-out/bin/rsa-cli encrypt --pub id_rsa.pub "Mensagem ultra confidencial" --inspect > msg.enc
+  ```
+- **Via Pipe POSIX (`stdin` ➔ `stdout`):**
+  ```bash
+  echo "Mensagem ultra confidencial" | ./zig-out/bin/rsa-cli encrypt --pub id_rsa.pub --inspect > msg.enc
+  ```
+- **Via Flags de Arquivo (`--in` e `--out`):**
+  ```bash
+  ./zig-out/bin/rsa-cli encrypt --pub id_rsa.pub --in mensagem.txt --out msg.enc --inspect
+  ```
+
+#### 3. Descriptografia Acelerada via CRT (`decrypt` — Algoritmo de Garner)
+- **Direto por Argumento Posicional:**
+  ```bash
+  ./zig-out/bin/rsa-cli decrypt --priv id_rsa.key "<cifra_base64>" --inspect
+  ```
+- **Via Redirecionamento POSIX (`stdin`):**
+  ```bash
+  ./zig-out/bin/rsa-cli decrypt --priv id_rsa.key --inspect < msg.enc
+  ```
+- **Via Flags de Arquivo (`--in` e `--out`):**
+  ```bash
+  ./zig-out/bin/rsa-cli decrypt --priv id_rsa.key --in msg.enc --out decifrado.txt --inspect
+  ```
+
+*Saída de inspeção no `stderr`:*
+```text
+=== COMPARAÇÃO CRT vs EXPONENCIAÇÃO DIRETA ===
+  Tempo CRT (Algoritmo de Garner) : 2126 μs
+  Tempo Direto (c^d mod n)       : 6090 μs
+  Aceleração observada            : 2.86x mais rápido
+==============================================
+Mensagem ultra confidencial
+```
+
+---
+
+### 🌐 Parte 3: Como Usar o Modo WebAssembly (`rsa.wasm`)
+
+Acesse a aplicação interativa pelo **[GitHub Pages](https://o-gariba.github.io/rsa-zig-seguranca-info-fatec-rp/)** ou pelo servidor local (`http://localhost:8080`). O módulo `rsa.wasm` (*freestanding*) se comunica diretamente com o JavaScript via memória linear (`ArrayBuffer`) e coleta entropia real do navegador via `window.crypto.getRandomValues()`.
+
+Você pode utilizar a interface Web de **duas maneiras**:
+
+#### 1. Pelos Botões de Demonstração Rápida
+1. **`1. Gerar Chaves (Keygen)`**: Executa o Crivo de 256 Primos + Miller-Rabin no WebAssembly e atualiza o painel de fórmulas com os valores hexadecimais reais de $p, q, n, d, d_p, d_q, q_{\text{inv}}$.
+2. **`2. Criptografar (OAEP)`**: Aplica o preenchimento probabilístico OAEP-SHA256 e exibe o criptograma em Base64 (344 caracteres).
+3. **`3. Decifrar (CRT Garner)`**: Executa a descriptografia acelerada pelo Teorema Chinês dos Restos e restaura a mensagem original.
+
+#### 2. Pelo Terminal Interativo Emulado (`user@rsa-zig:~$`)
+Clique na caixa de comando do terminal na página e digite qualquer um dos comandos abaixo (use as setas `↑` e `↓` para navegar pelo histórico):
+
+| Comando no Terminal Web | Descrição |
+| :--- | :--- |
+| `help` | Exibe a lista de comandos disponíveis no terminal Web. |
+| `rsa keygen` | Gera um novo par de chaves RSA-2048 na memória linear do WebAssembly. |
+| `rsa encrypt <mensagem>` | Criptografa qualquer texto personalizado (até 190 bytes UTF-8) usando OAEP-SHA256. |
+| `rsa decrypt` | Descriptografa a última cifra gerada na sessão via Algoritmo de Garner (CRT). |
+| `rsa decrypt <cifra_b64>` | Descriptografa um criptograma Base64 específico (344 caracteres) informado manualmente. |
+| `rsa inspect` | Imprime no terminal todos os parâmetros matemáticos atuais ($e, p, q, n, d, d_p, d_q, q_{\text{inv}}$). |
+| `clear` | Limpa a tela do terminal interativo. |
 
 ---
 
@@ -48,53 +185,20 @@ O projeto adota uma arquitetura pragmática de baixo nível em Zig:
 
 A fundamentação teórica completa, deduções e provas de corretude estão detalhadas em **[`docs/MATH_SPEC.md`](docs/MATH_SPEC.md)**:
 
-```
-  1. Buffer CSPRNG ──► 2. Forçar MSB/LSB ──► 3. Crivo (256 primos) ──► 4. Miller-Rabin (64x)
-                                                                               │ (p, q primos)
-  ┌────────────────────────────────────────────────────────────────────────────┘
-  ▼
-  5. Módulo n = p · q (2048-bit)
-     Totiente λ(n) = mmc(p-1, q-1)
-     Chave privada d ≡ e⁻¹ mod λ(n) via Euclides Estendido (i4096)
-     Parâmetros CRT: dp, dq, q_inv
-  │
-  ▼
-  6. Padding OAEP-SHA256 (Feistel Network: seed ⊕ MGF1, DB ⊕ MGF1)
-  │
-  ▼
-  7. Cifra: c = mᵉ mod n (Montgomery 2048-bit)
-     Decifra CRT (Algoritmo de Garner): ganho de ~4x em tempo de CPU!
-```
+```mermaid
+flowchart TD
+    subgraph KEYGEN["🔑 Geração de Chaves (1024-bit p, q ➔ 2048-bit n)"]
+        S1["1. Buffer CSPRNG<br/>(128 bytes aleatórios)"] --> S2["2. Bit Masking<br/>Forçar 2 MSBs (11₂) e LSB (ímpar)"]
+        S2 --> S3["3. Crivo de Eratóstenes<br/>(256 primos ímpares: 3..1621)"]
+        S3 --> S4["4. Teste de Miller-Rabin<br/>(64 rodadas via Montgomery 1024-bit)"]
+        S4 -->|Primos p e q validados| S5["5. Aritmética de Chave<br/>• n = p · q (u2048)<br/>• λ(n) = mmc(p-1, q-1)<br/>• d ≡ e⁻¹ mod λ(n) (Euclides i4096)<br/>• CRT: dp, dq, q_inv"]
+    end
 
----
-
-## 💻 Uso da Interface de Linha de Comando (CLI)
-
-O executável nativo suporta pipes POSIX e fluxos padrão (`stdin`/`stdout`), direcionando dados de inspeção para `stderr`:
-
-### 1. Geração de Chaves RSA-2048
-```bash
-./zig-out/bin/rsa-cli keygen --pub id_rsa.pub --priv id_rsa.key --inspect
-```
-
-### 2. Criptografia com Pipe POSIX
-```bash
-echo "Mensagem ultra confidencial" | ./zig-out/bin/rsa-cli encrypt --pub id_rsa.pub --inspect > msg.enc
-```
-
-### 3. Descriptografia Acelerada via CRT
-```bash
-./zig-out/bin/rsa-cli decrypt --priv id_rsa.key --inspect < msg.enc
-```
-
-*Saída de inspeção no `stderr`:*
-```text
-=== COMPARAÇÃO CRT vs EXPONENCIAÇÃO DIRETA ===
-  Tempo CRT (Algoritmo de Garner) : 2126 μs
-  Tempo Direto (c^d mod n)       : 6090 μs
-  Aceleração observada            : 2.86x mais rápido
-==============================================
-Mensagem ultra confidencial
+    subgraph CRYPTO["🛡️ Criptografia & Descriptografia Acelerada"]
+        S5 --> S6["6. Padding OAEP-SHA256<br/>Rede de Feistel (seed ⊕ MGF1, DB ⊕ MGF1)"]
+        S6 --> S7A["7a. Cifragem (RSAEP)<br/>c = mᵉ mod n (Montgomery 2048-bit)"]
+        S7A --> S7B["7b. Decifragem CRT (Algoritmo de Garner)<br/>m₁ = c_p^dp mod p | m₂ = c_q^dq mod q<br/>⚡ ~4x mais rápido em tempo constante"]
+    end
 ```
 
 ---
@@ -141,9 +245,36 @@ vim src/core/prime.zig
 
 ---
 
-## 📁 Estrutura de Diretórios
+## 🗺️ Mapa Visual do Código e Estrutura de Diretórios
 
+```mermaid
+mindmap
+  root(("🔐 rsa-project<br/>(Zig 0.17+)"))
+    ["🖥️ Interfaces de Entrada (src/)"]
+      ["main_cli.zig<br/>CLI Nativo (Pipes POSIX, stdin/stdout)"]
+      ["main_wasm.zig<br/>Wasm Freestanding (C-ABI Linear Mem)"]
+    ["🧠 Núcleo Criptográfico (src/core/)<br/>Zero Alocação Dinâmica (100% Stack)"]
+      ["root.zig<br/>Fachada Central & 27 Testes"]
+      ["rsa.zig<br/>KeyPair, RSAEP & CRT Garner"]
+      ["prime.zig<br/>Crivo 256 Primos & Miller-Rabin 64x"]
+      ["euclid.zig<br/>GCD, LCM & Euclides Estendido (i4096)"]
+      ["padding.zig<br/>OAEP-SHA256 (MGF1) & PKCS#1 v1.5"]
+      ["codec.zig<br/>Serialização PEM, Base64 & Hex"]
+    ["🌐 Aplicação Web (web/)"]
+      ["index.html & app.js<br/>Terminal Emulado + WebCrypto"]
+      ["rsa.wasm<br/>Binário Wasm Pré-Compilado"]
+      ["install.sh / install.ps1<br/>Instaladores 1-Linha (User-Space)"]
+    ["⚙️ Automação & Documentação"]
+      ["build.zig<br/>Trava comptime >= 0.17 + Cross-Target"]
+      ["scripts/verify_deploy.py<br/>Oráculo Matemático em Python"]
+      [".github/workflows/deploy.yml<br/>CI/CD: Pages + 5 Binários Estáticos"]
+      ["docs/<br/>MATH_SPEC.md & ARCHITECTURE.md"]
 ```
+
+<details>
+<summary>📁 <b>Ver árvore de arquivos em texto</b></summary>
+
+```text
 rsa-project/
 ├── .github/
 │   └── workflows/
@@ -172,6 +303,7 @@ rsa-project/
     ├── install.sh            # Script de instalação em 1 linha (Linux/macOS)
     └── install.ps1           # Script de instalação em 1 linha (Windows PowerShell)
 ```
+</details>
 
 ---
 
