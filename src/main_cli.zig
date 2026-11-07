@@ -18,14 +18,15 @@ const core = @import("core/root.zig");
 
 const USAGE =
     \\Uso:
-    \\  rsa-cli keygen [--pub <arq>] [--priv <arq>] [--inspect]
-    \\  rsa-cli encrypt --pub <arq> [--in <arq>] [--out <arq>] [--inspect]
-    \\  rsa-cli decrypt --priv <arq> [--in <arq>] [--out <arq>] [--inspect]
+    \\  rsa-cli keygen  [--pub <arq>] [--priv <arq>] [--inspect]
+    \\  rsa-cli encrypt --pub <arq> [<mensagem>] [--in <arq>] [--out <arq>] [--inspect]
+    \\  rsa-cli decrypt --priv <arq> [<cifra_b64>] [--in <arq>] [--out <arq>] [--inspect]
     \\
-    \\Exemplos com pipes POSIX:
+    \\Exemplos:
     \\  rsa-cli keygen --pub id_rsa.pub --priv id_rsa.key --inspect
-    \\  echo "Mensagem secreta" | rsa-cli encrypt --pub id_rsa.pub > msg.enc
+    \\  rsa-cli encrypt --pub id_rsa.pub "Mensagem secreta" > msg.enc
     \\  rsa-cli decrypt --priv id_rsa.key < msg.enc
+    \\  echo "Mensagem secreta" | rsa-cli encrypt --pub id_rsa.pub > msg.enc
     \\
 ;
 
@@ -164,6 +165,7 @@ fn runEncrypt(io: std.Io, args: []const [:0]const u8) !void {
     var pub_path: ?[]const u8 = null;
     var in_path: ?[]const u8 = null;
     var out_path: ?[]const u8 = null;
+    var inline_msg: ?[]const u8 = null;
     var inspect = false;
 
     var i: usize = 0;
@@ -179,7 +181,22 @@ fn runEncrypt(io: std.Io, args: []const [:0]const u8) !void {
             i += 1;
         } else if (std.mem.eql(u8, args[i], "--inspect")) {
             inspect = true;
+        } else if (!std.mem.startsWith(u8, args[i], "-")) {
+            if (inline_msg == null) {
+                inline_msg = args[i];
+            } else {
+                printStderr(io, "Erro: argumento posicional inesperado '{s}'.\n", .{args[i]});
+                std.process.exit(1);
+            }
+        } else {
+            printStderr(io, "Erro: opcao desconhecida '{s}'.\n", .{args[i]});
+            std.process.exit(1);
         }
+    }
+
+    if (inline_msg != null and in_path != null) {
+        printStderr(io, "Erro: forneca a mensagem como argumento ou via --in, nao ambos.\n", .{});
+        std.process.exit(1);
     }
 
     const p_path = pub_path orelse {
@@ -192,7 +209,7 @@ fn runEncrypt(io: std.Io, args: []const [:0]const u8) !void {
     const pub_key = try core.codec.decodePublicKeyPem(pub_pem);
 
     var msg_buf: [512]u8 = undefined;
-    const msg = try readInput(io, in_path, &msg_buf);
+    const msg = if (inline_msg) |m| m else try readInput(io, in_path, &msg_buf);
 
     if (msg.len > core.padding.OAEP_MAX_MSG_LEN) {
         printStderr(io, "Erro: mensagem excede o limite de {d} bytes do OAEP-SHA256.\n", .{core.padding.OAEP_MAX_MSG_LEN});
@@ -237,6 +254,7 @@ fn runDecrypt(io: std.Io, args: []const [:0]const u8) !void {
     var priv_path: ?[]const u8 = null;
     var in_path: ?[]const u8 = null;
     var out_path: ?[]const u8 = null;
+    var inline_cipher: ?[]const u8 = null;
     var inspect = false;
 
     var i: usize = 0;
@@ -252,7 +270,22 @@ fn runDecrypt(io: std.Io, args: []const [:0]const u8) !void {
             i += 1;
         } else if (std.mem.eql(u8, args[i], "--inspect")) {
             inspect = true;
+        } else if (!std.mem.startsWith(u8, args[i], "-")) {
+            if (inline_cipher == null) {
+                inline_cipher = args[i];
+            } else {
+                printStderr(io, "Erro: argumento posicional inesperado '{s}'.\n", .{args[i]});
+                std.process.exit(1);
+            }
+        } else {
+            printStderr(io, "Erro: opcao desconhecida '{s}'.\n", .{args[i]});
+            std.process.exit(1);
         }
+    }
+
+    if (inline_cipher != null and in_path != null) {
+        printStderr(io, "Erro: forneca a cifra como argumento ou via --in, nao ambos.\n", .{});
+        std.process.exit(1);
     }
 
     const k_path = priv_path orelse {
@@ -267,7 +300,7 @@ fn runDecrypt(io: std.Io, args: []const [:0]const u8) !void {
     defer priv_key.wipe();
 
     var cipher_buf: [1024]u8 = undefined;
-    const cipher_slice = try readInput(io, in_path, &cipher_buf);
+    const cipher_slice = if (inline_cipher) |c| c else try readInput(io, in_path, &cipher_buf);
 
     const ciphertext = try core.codec.decodeCiphertextBase64(cipher_slice);
 
