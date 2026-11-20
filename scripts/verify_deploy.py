@@ -110,7 +110,7 @@ def test_cli_and_math():
         assert (q * q_inv) % p == 1, "FALHA: Coeficiente de Garner q_inv incorreto!"
         print_ok("Inverso modular de Garner correto: (q * q_inv) ≡ 1 mod p")
 
-        # 2. Cifragem e Decifragem ponta a ponta
+        # 2. Cifragem e Decifragem ponta a ponta (Pipes POSIX)
         secret_msg = "Mensagem secreta validada matematicamente pelo Python!"
         enc_proc = subprocess.run(
             [cli_path, "encrypt", "--pub", pub_path, "--out", enc_path, "--inspect"],
@@ -121,7 +121,7 @@ def test_cli_and_math():
         if enc_proc.returncode != 0:
             print_err(f"Falha na cifragem: {enc_proc.stderr}")
             return False
-        print_ok("Cifragem OAEP-SHA256 executada com sucesso")
+        print_ok("Cifragem OAEP-SHA256 executada com sucesso (via pipes POSIX)")
 
         dec_proc = subprocess.run(
             [cli_path, "decrypt", "--priv", priv_path, "--in", enc_path, "--inspect"],
@@ -135,6 +135,31 @@ def test_cli_and_math():
         restored_msg = dec_proc.stdout.strip()
         assert restored_msg == secret_msg, f"FALHA: Texto decifrado difere! ({restored_msg})"
         print_ok(f"Decifragem via Teorema Chinês dos Restos (CRT) 100% idêntica: '{restored_msg}'")
+
+        # 3. Cifragem e Decifragem com argumentos posicionais diretos
+        direct_msg = "Mensagem direta via argumento posicional!"
+        enc_direct = subprocess.run(
+            [cli_path, "encrypt", "--pub", pub_path, direct_msg],
+            capture_output=True,
+            text=True,
+        )
+        if enc_direct.returncode != 0:
+            print_err(f"Falha na cifragem direta posicional: {enc_direct.stderr}")
+            return False
+        cipher_b64 = enc_direct.stdout.strip()
+
+        dec_direct = subprocess.run(
+            [cli_path, "decrypt", "--priv", priv_path, cipher_b64],
+            capture_output=True,
+            text=True,
+        )
+        if dec_direct.returncode != 0:
+            print_err(f"Falha na decifragem direta posicional: {dec_direct.stderr}")
+            return False
+
+        restored_direct = dec_direct.stdout.strip()
+        assert restored_direct == direct_msg, f"FALHA: Decifragem direta difere! ({restored_direct})"
+        print_ok(f"Cifragem e Decifragem direta por argumento posicional 100% aprovada: '{restored_direct}'")
 
     return True
 
