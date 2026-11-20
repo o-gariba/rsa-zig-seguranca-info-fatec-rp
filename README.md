@@ -246,6 +246,12 @@ mindmap
         ("[4.3.4 - PROTEÇÃO SIDE-CHANNEL] Usa .pow() em tempo constante contra Timing Attacks e limpa chaves na stack com barreiras voláteis std.crypto.secureZero")
 ```
 
+## Integrantes do Grupo
+
+Christian de Lima
+Mariana Targas Barbosa
+Pedro Garibaldi Santos
+
 ---
 
 ## 📜 Licença
